@@ -18,22 +18,28 @@ document.getElementById('start-btn').addEventListener('click', () => {
 async function requestPermissionsAndStart() {
     let sensorGranted = false;
 
-    // Check for iOS 13+ permission API
+    // Check for iOS 13+ permission API (Orientation)
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         try {
             const permission = await DeviceOrientationEvent.requestPermission();
             if (permission === 'granted') {
                 sensorGranted = true;
-            } else {
-                alert('Permission denied. Please allow motion sensors to use the accordion effect.');
             }
         } catch (err) {
-            console.error("Permission request failed", err);
-            alert("HTTPS is required for motion sensors. Are you accessing via localhost or HTTP?");
+            console.error("Orientation permission request failed", err);
         }
     } else {
         // Non-iOS 13+ devices
         sensorGranted = true;
+    }
+
+    // Also check Motion Event just in case the browser categorizes them differently
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+        try {
+            await DeviceMotionEvent.requestPermission();
+        } catch (err) {
+            console.error("Motion permission request failed", err);
+        }
     }
 
     try {
@@ -44,10 +50,11 @@ async function requestPermissionsAndStart() {
 
         if (sensorGranted) {
             window.addEventListener('deviceorientation', onOrientation);
-            document.querySelector('.status-indicator').textContent = 'SYSTEM ACTIVE — SHAKE DEVICE';
+            document.querySelector('.status-indicator').textContent = 'SYSTEM ACTIVE — SHAKE & TILT DEVICE';
         } else {
             console.warn("Sensor request failed or denied. Defaulting to fixed volume.");
             document.querySelector('.status-indicator').textContent = 'SYSTEM ACTIVE — SENSORS UNAVAILABLE';
+            alert("Motion Sensors unavailable. Check if your browser blocked the prompt, or if you need to clear website data in Settings to reset the permission prompt.");
         }
 
         // Hide overlay and setup initial visuals
