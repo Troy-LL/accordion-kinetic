@@ -175,33 +175,54 @@ function releaseKey(key) {
  */
 async function requestSensors() {
     // iOS 13+ requires explicit permission request
-    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-        const permission = await DeviceMotionEvent.requestPermission();
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const permission = await DeviceOrientationEvent.requestPermission();
         if (permission !== 'granted') {
             alert('Motion permission denied — tilt controls won\'t work.');
             return;
         }
     }
-    window.addEventListener('devicemotion', onMotion);
+    // Safari / iOS requires orientation event to explicitly read the gyro on many device configurations.
+    window.addEventListener('deviceorientation', onOrientation);
 }
 
-function onMotion(e) {
-    const accel = e.accelerationIncludingGravity;
-    if (!accel || accel.y === null) return;
+// Track previous orientation to simulate 'velocity' / effort mapping.
+let lastBeta = null;
+let lastGamma = null;
 
-    // Combine X and Y axes so the motion detects tilting regardless
-    // of whether the phone is held in portrait or landscape mathematically.
-    const magnitude = Math.sqrt((accel.x * accel.x) + (accel.y * accel.y));
-    const raw = Math.min(magnitude / 9.8, 1.0);
+function onOrientation(e) {
+    if (e.beta === null || e.gamma === null) return;
 
-    // Exponential smoothing (Low-pass filter)
-    smoothed = 0.3 * raw + 0.7 * smoothed;
+    // In our forced landscape setup, beta represents the tilting motion
+    // we want to track (tilting the phone back/forward relative to the user).
+
+    if (lastBeta === null) {
+        lastBeta = e.beta;
+        lastGamma = e.gamma;
+        return;
+    }
+
+    // Calculate the angular delta (rate of change = "shaking" effort)
+    const deltaBeta = Math.abs(e.beta - lastBeta);
+    const deltaGamma = Math.abs(e.gamma - lastGamma);
+
+    // Create an intensity scalar from the rotation speed
+    // 5 degrees of movement per frame represents very fast movement.
+    const magnitude = (deltaBeta + deltaGamma) / 5;
+    const raw = Math.min(magnitude, 1.0);
+
+    // Update tracking
+    lastBeta = e.beta;
+    lastGamma = e.gamma;
+
+    // Exponential smoothing (Low-pass filter but with a slightly faster decay so it 'breathes')
+    smoothed = 0.4 * raw + 0.6 * smoothed;
     bellowsSpeed = Math.min(smoothed, 1.0);
 
     updateVisuals(bellowsSpeed);
 
     // If a note is playing, update its volume live
-    if (activeNote) {
+    if (activeNote || activeKeys.size > 0) {
         setVolume(bellowsSpeed);
     }
 }
