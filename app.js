@@ -150,8 +150,10 @@ function onMotion(e) {
     const accel = e.accelerationIncludingGravity;
     if (!accel || accel.y === null) return;
 
-    // Normalize Y-axis: Tilting front to back
-    const raw = Math.abs(accel.y) / 9.8;
+    // Combine X and Y axes so the motion detects tilting regardless
+    // of whether the phone is held in portrait or landscape mathematically.
+    const magnitude = Math.sqrt((accel.x * accel.x) + (accel.y * accel.y));
+    const raw = Math.min(magnitude / 9.8, 1.0);
 
     // Exponential smoothing (Low-pass filter)
     smoothed = 0.3 * raw + 0.7 * smoothed;

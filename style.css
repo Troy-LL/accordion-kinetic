@@ -20,6 +20,7 @@ body {
     background: var(--bg);
     color: var(--text);
     font-family: var(--font-mono);
+    width: 100vw;
     height: 100dvh;
     display: flex;
     flex-direction: column;
@@ -28,7 +29,19 @@ body {
     padding: 2rem 1rem;
     overflow: hidden;
     touch-action: none;
-    /* prevent scroll while playing */
+}
+
+/* Force Landscape for Mobile Portrait */
+@media screen and (orientation: portrait) {
+    body {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        width: 100dvh;
+        height: 100vw;
+        transform: translate(-50%, -50%) rotate(90deg);
+        transform-origin: center center;
+    }
 }
 
 /* Header & Branding */
