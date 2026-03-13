@@ -7,6 +7,7 @@ let synth = null;
 let activeNote = null;
 let bellowsSpeed = 0.5; // Starts at 0.5 so manual clicking still produces sound
 let smoothed = 0.5;
+let isStarted = false;  // CRITICAL: Required for orientation events to play audio
 
 // Kick everything off from the mandatory start button tap
 document.getElementById('start-btn').addEventListener('click', () => {
@@ -47,6 +48,7 @@ async function requestPermissionsAndStart() {
         await Tone.start();
         initAudio();
         setupKeys();
+        isStarted = true;
 
         if (sensorGranted) {
             window.addEventListener('deviceorientation', onOrientation);
