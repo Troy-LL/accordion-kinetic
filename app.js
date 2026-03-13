@@ -1,89 +1,157 @@
 /**
- * Accordion Kinetic Logic
- * Handles interaction, motion sensors, and physics-based feedback.
+ * Accordion Kinetic — Phase 6: Final Wiring
+ * Integrates Motion Sensors, AMSynth Engine, and Touch UI.
  */
 
-document.addEventListener('DOMContentLoaded', () => {
-    initAccordion();
-    initSensors();
+let synth = null;
+let activeNote = null;
+let bellowsSpeed = 0;
+let smoothed = 0;
+
+// Kick everything off from the mandatory start button tap
+document.getElementById('start-btn').addEventListener('click', async () => {
+    try {
+        await Tone.start();
+        await requestSensors();
+        initAudio();
+        setupKeys();
+
+        // Hide overlay
+        document.getElementById('permission-screen').style.display = 'none';
+        document.querySelector('.status-indicator').textContent = 'SYSTEM ACTIVE — TILT Y-AXIS';
+    } catch (err) {
+        console.error("Initialization failed:", err);
+        alert("Motion sensors hardware not detected or HTTPS required.");
+    }
 });
 
 /**
- * Basic Accordion Interaction
+ * 1. Audio Engine (AMSynth)
  */
-function initAccordion() {
-    const items = document.querySelectorAll('.accordion-item');
-    
-    items.forEach(item => {
-        const trigger = item.querySelector('.accordion-trigger');
-        
-        trigger.addEventListener('click', () => {
-            const isActive = item.classList.contains('active');
-            
-            // Close all others
-            items.forEach(i => i.classList.remove('active'));
-            
-            // Toggle current
-            if (!isActive) {
-                item.classList.add('active');
-            }
+function initAudio() {
+    synth = new Tone.AMSynth({
+        oscillator: { type: 'sawtooth' },
+        envelope: {
+            attack: 0.02,
+            decay: 0.1,
+            sustain: 0.9,
+            release: 0.3
+        },
+        volume: -40
+    }).toDestination();
+}
+
+function playNote(note) {
+    if (!synth) return;
+    activeNote = note;
+    synth.triggerAttack(note);
+    setVolume(bellowsSpeed);
+}
+
+function stopNote() {
+    if (!synth || !activeNote) return;
+    synth.triggerRelease();
+    activeNote = null;
+}
+
+function setVolume(speed) {
+    if (!synth) return;
+    // Convert 0–1 speed to decibels: -40db (silent) to -5db (loud)
+    const db = -40 + speed * 35;
+    synth.volume.rampTo(db, 0.05); // smooth 50ms ramp
+
+    const statusVal = document.getElementById('val-status');
+    if (statusVal) statusVal.textContent = speed > 0.1 ? 'RESONATING' : 'IDLE';
+}
+
+/**
+ * 2. Visual Layer
+ */
+function updateVisuals(speed) {
+    // Bellows scale: 0.3 (collapsed) to 1.0 (fully open)
+    const scale = 0.3 + speed * 0.7;
+    document.getElementById('bellows-inner').style.transform = `scaleY(${scale})`;
+
+    // Meter fill
+    document.getElementById('meter-fill').style.width = `${speed * 100}%`;
+
+    // Numerical display
+    const valInt = document.getElementById('val-intensity');
+    if (valInt) valInt.textContent = speed.toFixed(2);
+}
+
+/**
+ * 3. Interaction Layer (Mobile Optimized)
+ */
+function setupKeys() {
+    document.querySelectorAll('.key').forEach(key => {
+        const note = key.dataset.note;
+
+        // Touch events for mobile — preventing default scroll is critical
+        key.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            key.classList.add('playing'); // matches CSS
+            playNote(note);
+
+            const valNote = document.getElementById('val-note');
+            if (valNote) valNote.textContent = note;
+        }, { passive: false });
+
+        key.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            key.classList.remove('playing');
+            stopNote();
+
+            const valNote = document.getElementById('val-note');
+            if (valNote) valNote.textContent = '—';
+        }, { passive: false });
+
+        // Mouse events for desktop testing
+        key.addEventListener('mousedown', () => {
+            key.classList.add('playing');
+            playNote(note);
+        });
+        key.addEventListener('mouseup', () => {
+            key.classList.remove('playing');
+            stopNote();
+        });
+        key.addEventListener('mouseleave', () => {
+            key.classList.remove('playing');
+            stopNote();
         });
     });
 }
 
 /**
- * Motion Sensor Integration
+ * 4. Sensor Reading
  */
-function initSensors() {
-    const btnPermission = document.getElementById('request-permission');
-    const alphaDisp = document.getElementById('val-alpha');
-    const betaDisp = document.getElementById('val-beta');
-    const gammaDisp = document.getElementById('val-gamma');
-    const container = document.querySelector('.app-container');
-
-    // Handle sensor data
-    const handleOrientation = (event) => {
-        const { alpha, beta, gamma } = event;
-        
-        // Update Displays
-        alphaDisp.textContent = alpha ? alpha.toFixed(2) : '0.00';
-        betaDisp.textContent = beta ? beta.toFixed(2) : '0.00';
-        gammaDisp.textContent = gamma ? gamma.toFixed(2) : '0.00';
-
-        // Kinetic Effect: Tilt the active panel or container slightly
-        // Beta is front-back (approx -180 to 180)
-        // Gamma is left-right (approx -90 to 90)
-        
-        const tiltX = (beta / 10).toFixed(2);
-        const tiltY = (gamma / 10).toFixed(2);
-        
-        const activeItem = document.querySelector('.accordion-item.active');
-        if (activeItem) {
-            activeItem.style.transform = `perspective(1000px) rotateX(${-tiltX}deg) rotateY(${tiltY}deg)`;
+async function requestSensors() {
+    // iOS 13+ requires explicit permission request
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+        const permission = await DeviceMotionEvent.requestPermission();
+        if (permission !== 'granted') {
+            alert('Motion permission denied — tilt controls won\'t work.');
+            return;
         }
-    };
+    }
+    window.addEventListener('devicemotion', onMotion);
+}
 
-    // Permission request logic for iOS
-    btnPermission.addEventListener('click', async () => {
-        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-            try {
-                const permissionState = await DeviceOrientationEvent.requestPermission();
-                if (permissionState === 'granted') {
-                    window.addEventListener('deviceorientation', handleOrientation);
-                    btnPermission.textContent = "SENSORS ACTIVE";
-                    btnPermission.style.opacity = "0.5";
-                } else {
-                    alert('Sensor access denied.');
-                }
-            } catch (error) {
-                console.error('Permission error:', error);
-                alert('Sensor request failed. Ensure you are on HTTPS.');
-            }
-        } else {
-            // Non-iOS or older browser
-            window.addEventListener('deviceorientation', handleOrientation);
-            btnPermission.textContent = "SENSORS ACTIVE";
-            btnPermission.style.opacity = "0.5";
-        }
-    });
+function onMotion(e) {
+    const accel = e.accelerationIncludingGravity;
+    if (!accel) return;
+
+    // Normalize Y-axis: Tilting front to back
+    const raw = Math.abs(accel.y) / 9.8;
+
+    // Exponential smoothing (Low-pass filter)
+    smoothed = 0.3 * raw + 0.7 * smoothed;
+    bellowsSpeed = Math.min(smoothed, 1.0);
+
+    updateVisuals(bellowsSpeed);
+
+    // If a note is playing, update its volume live
+    if (activeNote) {
+        setVolume(bellowsSpeed);
+    }
 }

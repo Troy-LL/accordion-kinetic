@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Accordion Kinetic — Physical Motion UI</title>
     <meta name="description"
-        content="A motion-driven accordion experience utilizing device sensors and brutalist aesthetics.">
+        content="A motion-driven accordion instrument utilizing device sensors and brutalist aesthetics.">
 
     <!-- Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,6 +19,9 @@
     <!-- PWA / Mobile optimization -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- Audio Engine -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 </head>
 
 <body>
@@ -26,54 +29,44 @@
         <header class="app-header">
             <img src="assets/logo.png" alt="Kinetic Logo" class="app-logo">
             <h1 class="glitch-text" data-text="ACCORDION">ACCORDION</h1>
-            <p class="status-indicator">SYSTEM READY — TILT TO INTERACT</p>
+            <p class="status-indicator">SYSTEM READY — TILT TO ACTIVATE BELLOWS</p>
         </header>
 
-        <section class="accordion-system" id="accordion">
-            <!-- Items will be generated or styled here -->
-            <div class="accordion-item" data-id="1">
-                <button class="accordion-trigger">
-                    <span class="item-number">01</span>
-                    <span class="item-title">KINETIC ENGINE</span>
-                    <span class="item-icon"></span>
-                </button>
-                <div class="accordion-content">
-                    <p>Experience the intersection of physics and interface. This module utilizes the DeviceMotion API
-                        to respond to real-world orientation. Every tilt shifts the gravitational center of the UI.</p>
-                </div>
-            </div>
+        <!-- Bellows visual: Represents sensor intensity -->
+        <div id="bellows">
+            <div id="bellows-inner"></div>
+        </div>
 
-            <div class="accordion-item" data-id="2">
-                <button class="accordion-trigger">
-                    <span class="item-number">02</span>
-                    <span class="item-title">BRUTALIST ARCH</span>
-                    <span class="item-icon"></span>
-                </button>
-                <div class="accordion-content">
-                    <p>Raw materials, exposed structures, and high-contrast logic. We don't hide the mechanics; we
-                        celebrate them through typography and spatial rhythm.</p>
-                </div>
-            </div>
+        <!-- Volume meter: Real-time audio feedback -->
+        <div id="meter">
+            <div id="meter-fill"></div>
+        </div>
 
-            <div class="accordion-item" data-id="3">
-                <button class="accordion-trigger">
-                    <span class="item-number">03</span>
-                    <span class="item-title">SENSOR ARRAY</span>
-                    <span class="item-icon"></span>
-                </button>
-                <div class="accordion-content">
-                    <p>Accessing accelerometer data to determine spatial velocity. On HTTPS environments, tilt your
-                        phone to see the subtle parallax and weighting effects on the active panel.</p>
-                    <button id="request-permission" class="btn-action">ENABLE SENSORS</button>
-                </div>
+        <!-- Note buttons: High-impact touch targets (HIG compliant) -->
+        <div id="keys">
+            <button class="key" data-note="C4">C</button>
+            <button class="key" data-note="D4">D</button>
+            <button class="key" data-note="E4">E</button>
+            <button class="key" data-note="F4">F</button>
+            <button class="key" data-note="G4">G</button>
+            <button class="key" data-note="A4">A</button>
+            <button class="key" data-note="B4">B</button>
+            <button class="key" data-note="C5">C</button>
+        </div>
+
+        <!-- Permission prompt (Mandatory iOS user gesture) -->
+        <div id="permission-screen">
+            <div class="overlay-content">
+                <p>KINETIC PERMISSION REQUIRED</p>
+                <button id="start-btn" class="btn-action">TAP TO START SYSTEM</button>
             </div>
-        </section>
+        </div>
 
         <footer class="app-footer">
             <div class="sensor-info">
-                <span>ALPHA: <em id="val-alpha">0.00</em></span>
-                <span>BETA: <em id="val-beta">0.00</em></span>
-                <span>GAMMA: <em id="val-gamma">0.00</em></span>
+                <span>INTENSITY: <em id="val-intensity">0.00</em></span>
+                <span>NOTE: <em id="val-note">—</em></span>
+                <span>STATUS: <em id="val-status">IDLE</em></span>
             </div>
         </footer>
     </main>
