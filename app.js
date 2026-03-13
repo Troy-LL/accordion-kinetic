@@ -64,23 +64,25 @@ async function requestPermissionsAndStart() {
  * 1. Audio Engine (PolySynth + EQ for Bass)
  */
 function initAudio() {
-    // 1. Give it a massive bass boost to physically rattle the phone speaker
+    // 1. Massive bass boost to physically rattle the phone speaker
     const eq = new Tone.EQ3({
-        low: 14,   // +14dB on lows (Max bass)
-        mid: 2,    // slight mid presence
-        high: 4    // crisp high reeds
+        low: 15,   // +15dB on lows (Max bass)
+        mid: 2,
+        high: 4
     }).toDestination();
 
-    // 2. Add a thick compressor so the heavy bass and loud volume don't clip into distortion
+    // 2. Thick compressor to glue the bass together without clipping
     const compressor = new Tone.Compressor(-15, 6).connect(eq);
 
-    // 3. PolySynth allows chords/glissando perfectly.
-    // 'fatsawtooth' emulates a French Musette accordion (multiple reeds slightly detuned)
+    // 3. Lush Stereo Chorus for that rich, harmonized accordion width
+    const chorus = new Tone.Chorus(4, 2.5, 0.5).connect(compressor).start();
+
+    // 4. PolySynth emulates a French Musette accordion
     synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: {
             type: 'fatsawtooth',
             count: 3,        // 3 stacked reeds per note
-            spread: 20       // detuned for the classic accordion wobble
+            spread: 25       // detuned for the classic accordion wobble
         },
         envelope: {
             attack: 0.05,
@@ -88,22 +90,34 @@ function initAudio() {
             sustain: 0.9,
             release: 0.4
         }
-    }).connect(compressor);
+    }).connect(chorus);
 
     // Start heavily down to prevent initial pops
     synth.volume.value = -40;
 }
 
+// Automatically create a massive chord (Sub-bass, Root, Perfect 5th)
+function getHarmonicChord(baseNote) {
+    const freq = Tone.Frequency(baseNote);
+    return [
+        freq.transpose(-12).toNote(), // Deep sub octave
+        baseNote,                     // Root note
+        freq.transpose(7).toNote()    // Harmonizing Perfect Fifth
+    ];
+}
+
 function playNote(note) {
     if (!synth) return;
     activeNote = note;
-    synth.triggerAttack(note);
+    const chord = getHarmonicChord(note);
+    synth.triggerAttack(chord);
     setVolume(bellowsSpeed);
 }
 
 function stopNote(note) {
     if (!synth) return;
-    synth.triggerRelease(note);
+    const chord = getHarmonicChord(note);
+    synth.triggerRelease(chord);
 }
 
 function setVolume(speed) {
@@ -223,13 +237,27 @@ function releaseKey(key) {
 // Track previous orientation to simulate 'velocity' / effort mapping.
 let lastBeta = null;
 let lastGamma = null;
+let smoothedPitch = 0;
 
 function onOrientation(e) {
     if (e.beta === null || e.gamma === null) return;
 
-    // In our forced landscape setup, beta represents the tilting motion
-    // we want to track (tilting the phone back/forward relative to the user).
+    // --- PITCH MAPPING via Absolute Tilt ---
+    // In forced landscape, lifting your phone up towards you shifts Gamma or Beta wildly depending on exact holding angle.
+    // Combining them gives a robust "tilt off the flat axis" metric.
+    const combinedTilt = Math.max(0, Math.min(Math.abs(e.beta) + Math.abs(e.gamma), 90));
 
+    // Map 0-90 tilt to -1200 (low octave) to +1200 (high octave) cents
+    const targetPitch = ((combinedTilt / 90) * 2400) - 1200;
+
+    // Smooth the pitch glissando so it sings instead of glitching
+    smoothedPitch = 0.2 * targetPitch + 0.8 * smoothedPitch;
+
+    if (synth && isStarted) {
+        synth.set({ detune: smoothedPitch });
+    }
+
+    // --- VOLUME MAPPING via "Shaking" ---
     if (lastBeta === null) {
         lastBeta = e.beta;
         lastGamma = e.gamma;
