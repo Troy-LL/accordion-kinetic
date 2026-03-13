@@ -86,7 +86,14 @@ function initAudio() {
     // 3. Lush Stereo Chorus for that rich, harmonized accordion width
     const chorus = new Tone.Chorus(4, 2.5, 0.5).connect(compressor).start();
 
-    // 4. PolySynth emulates a French Musette accordion
+    // 4. Algorithmic Reverb to place the instrument in a physical acoustic space
+    const reverb = new Tone.Reverb({
+        decay: 2.5,
+        preDelay: 0.1,
+        wet: 0.4
+    }).connect(chorus);
+
+    // 5. PolySynth emulates a French Musette accordion
     synth = new Tone.PolySynth(Tone.Synth, {
         oscillator: {
             type: 'fatsawtooth',
@@ -99,7 +106,7 @@ function initAudio() {
             sustain: 0.9,
             release: 0.4
         }
-    }).connect(chorus);
+    }).connect(reverb);
 
     // Start heavily down to prevent initial pops
     synth.volume.value = -40;
@@ -163,7 +170,7 @@ function updateVisuals(speed) {
 const activeKeys = new Set();
 
 function setupKeys() {
-    const keysContainer = document.getElementById('keys');
+    const keysContainer = document.getElementById('keys-container');
 
     // Global Touch Events for Glissando (Sliding)
     keysContainer.addEventListener('touchstart', handleTouch, { passive: false });
