@@ -5,23 +5,32 @@
 
 let synth = null;
 let activeNote = null;
-let bellowsSpeed = 0;
-let smoothed = 0;
+let bellowsSpeed = 0.5; // Starts at 0.5 so manual clicking still produces sound
+let smoothed = 0.5;
 
 // Kick everything off from the mandatory start button tap
 document.getElementById('start-btn').addEventListener('click', async () => {
     try {
         await Tone.start();
-        await requestSensors();
         initAudio();
         setupKeys();
 
+        // Attempt to request sensors, but don't block the app if they fail or are on HTTP
+        try {
+            await requestSensors();
+        } catch (sensorErr) {
+            console.warn("Sensor request failed (HTTPS required or hardware missing).", sensorErr);
+        }
+
         // Hide overlay
         document.getElementById('permission-screen').style.display = 'none';
-        document.querySelector('.status-indicator').textContent = 'SYSTEM ACTIVE — TILT Y-AXIS';
+        document.querySelector('.status-indicator').textContent = 'SYSTEM ACTIVE';
+
+        // Initial visual update so the fallback volume is reflected
+        updateVisuals(bellowsSpeed);
     } catch (err) {
-        console.error("Initialization failed:", err);
-        alert("Motion sensors hardware not detected or HTTPS required.");
+        console.error("Audio Initialization failed:", err);
+        alert("Audio initialization failed. Ensure you have interacted with the document.");
     }
 });
 
@@ -139,7 +148,7 @@ async function requestSensors() {
 
 function onMotion(e) {
     const accel = e.accelerationIncludingGravity;
-    if (!accel) return;
+    if (!accel || accel.y === null) return;
 
     // Normalize Y-axis: Tilting front to back
     const raw = Math.abs(accel.y) / 9.8;
