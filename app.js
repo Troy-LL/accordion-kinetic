@@ -57,10 +57,9 @@ function playNote(note) {
     setVolume(bellowsSpeed);
 }
 
-function stopNote() {
-    if (!synth || !activeNote) return;
-    synth.triggerRelease();
-    activeNote = null;
+function stopNote(note) {
+    if (!synth) return;
+    synth.triggerRelease(note);
 }
 
 function setVolume(speed) {
@@ -90,45 +89,85 @@ function updateVisuals(speed) {
 }
 
 /**
- * 3. Interaction Layer (Mobile Optimized)
+ * 3. Interaction Layer (Mobile Optimized Glissando)
  */
+const activeKeys = new Set();
+
 function setupKeys() {
+    const keysContainer = document.getElementById('keys');
+
+    // Global Touch Events for Glissando (Sliding)
+    keysContainer.addEventListener('touchstart', handleTouch, { passive: false });
+    keysContainer.addEventListener('touchmove', handleTouch, { passive: false });
+    keysContainer.addEventListener('touchend', handleTouchEnd, { passive: false });
+    keysContainer.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+
+    // Desktop events
     document.querySelectorAll('.key').forEach(key => {
-        const note = key.dataset.note;
-
-        // Touch events for mobile — preventing default scroll is critical
-        key.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            key.classList.add('playing'); // matches CSS
-            playNote(note);
-
-            const valNote = document.getElementById('val-note');
-            if (valNote) valNote.textContent = note;
-        }, { passive: false });
-
-        key.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            key.classList.remove('playing');
-            stopNote();
-
-            const valNote = document.getElementById('val-note');
-            if (valNote) valNote.textContent = '—';
-        }, { passive: false });
-
-        // Mouse events for desktop testing
-        key.addEventListener('mousedown', () => {
-            key.classList.add('playing');
-            playNote(note);
+        key.addEventListener('mousedown', () => triggerKey(key));
+        key.addEventListener('mouseenter', (e) => {
+            if (e.buttons > 0) triggerKey(key);
         });
-        key.addEventListener('mouseup', () => {
-            key.classList.remove('playing');
-            stopNote();
-        });
-        key.addEventListener('mouseleave', () => {
-            key.classList.remove('playing');
-            stopNote();
-        });
+        key.addEventListener('mouseleave', () => releaseKey(key));
+        key.addEventListener('mouseup', () => releaseKey(key));
     });
+}
+
+function handleTouch(e) {
+    e.preventDefault(); // crucial for no-scroll
+    const currentTouches = new Set();
+
+    for (let i = 0; i < e.touches.length; i++) {
+        const touch = e.touches[i];
+        const el = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (el && el.classList.contains('key')) {
+            currentTouches.add(el);
+            triggerKey(el);
+        }
+    }
+
+    // Release keys no longer being touched
+    activeKeys.forEach(key => {
+        if (!currentTouches.has(key)) {
+            releaseKey(key);
+        }
+    });
+}
+
+function handleTouchEnd(e) {
+    e.preventDefault();
+    if (e.touches.length === 0) {
+        activeKeys.forEach(key => releaseKey(key));
+    } else {
+        handleTouch(e);
+    }
+}
+
+function triggerKey(key) {
+    if (activeKeys.has(key)) return;
+    activeKeys.add(key);
+    key.classList.add('playing');
+    playNote(key.dataset.note);
+
+    const valNote = document.getElementById('val-note');
+    if (valNote) valNote.textContent = key.dataset.note;
+}
+
+function releaseKey(key) {
+    if (!activeKeys.has(key)) return;
+    activeKeys.delete(key);
+    key.classList.remove('playing');
+    stopNote(key.dataset.note);
+
+    if (activeKeys.size === 0) {
+        activeNote = null;
+        const valNote = document.getElementById('val-note');
+        if (valNote) valNote.textContent = '—';
+    } else {
+        const remaining = Array.from(activeKeys)[0];
+        const valNote = document.getElementById('val-note');
+        if (valNote && remaining) valNote.textContent = remaining.dataset.note;
+    }
 }
 
 /**
