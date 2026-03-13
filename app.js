@@ -9,30 +9,56 @@ let bellowsSpeed = 0.5; // Starts at 0.5 so manual clicking still produces sound
 let smoothed = 0.5;
 
 // Kick everything off from the mandatory start button tap
-document.getElementById('start-btn').addEventListener('click', async () => {
+document.getElementById('start-btn').addEventListener('click', () => {
+    // 1. iOS requires permission requests to be SYNCHRONOUS to the click event.
+    // If we await Tone.start() first, Safari drops the user-gesture context.
+    requestPermissionsAndStart();
+});
+
+async function requestPermissionsAndStart() {
+    let sensorGranted = false;
+
+    // Check for iOS 13+ permission API
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+            const permission = await DeviceOrientationEvent.requestPermission();
+            if (permission === 'granted') {
+                sensorGranted = true;
+            } else {
+                alert('Permission denied. Please allow motion sensors to use the accordion effect.');
+            }
+        } catch (err) {
+            console.error("Permission request failed", err);
+            alert("HTTPS is required for motion sensors. Are you accessing via localhost or HTTP?");
+        }
+    } else {
+        // Non-iOS 13+ devices
+        sensorGranted = true;
+    }
+
     try {
+        // Initialize Audio after permissions
         await Tone.start();
         initAudio();
         setupKeys();
 
-        // Attempt to request sensors, but don't block the app if they fail or are on HTTP
-        try {
-            await requestSensors();
-        } catch (sensorErr) {
-            console.warn("Sensor request failed (HTTPS required or hardware missing).", sensorErr);
+        if (sensorGranted) {
+            window.addEventListener('deviceorientation', onOrientation);
+            document.querySelector('.status-indicator').textContent = 'SYSTEM ACTIVE — SHAKE DEVICE';
+        } else {
+            console.warn("Sensor request failed or denied. Defaulting to fixed volume.");
+            document.querySelector('.status-indicator').textContent = 'SYSTEM ACTIVE — SENSORS UNAVAILABLE';
         }
 
-        // Hide overlay
+        // Hide overlay and setup initial visuals
         document.getElementById('permission-screen').style.display = 'none';
-        document.querySelector('.status-indicator').textContent = 'SYSTEM ACTIVE';
-
-        // Initial visual update so the fallback volume is reflected
         updateVisuals(bellowsSpeed);
+
     } catch (err) {
         console.error("Audio Initialization failed:", err);
-        alert("Audio initialization failed. Ensure you have interacted with the document.");
+        alert("Audio initialization failed. Ensure your volume is up.");
     }
-});
+}
 
 /**
  * 1. Audio Engine (AMSynth)
@@ -173,18 +199,6 @@ function releaseKey(key) {
 /**
  * 4. Sensor Reading
  */
-async function requestSensors() {
-    // iOS 13+ requires explicit permission request
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        const permission = await DeviceOrientationEvent.requestPermission();
-        if (permission !== 'granted') {
-            alert('Motion permission denied — tilt controls won\'t work.');
-            return;
-        }
-    }
-    // Safari / iOS requires orientation event to explicitly read the gyro on many device configurations.
-    window.addEventListener('deviceorientation', onOrientation);
-}
 
 // Track previous orientation to simulate 'velocity' / effort mapping.
 let lastBeta = null;
