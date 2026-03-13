@@ -61,19 +61,37 @@ async function requestPermissionsAndStart() {
 }
 
 /**
- * 1. Audio Engine (AMSynth)
+ * 1. Audio Engine (PolySynth + EQ for Bass)
  */
 function initAudio() {
-    synth = new Tone.AMSynth({
-        oscillator: { type: 'sawtooth' },
-        envelope: {
-            attack: 0.02,
-            decay: 0.1,
-            sustain: 0.9,
-            release: 0.3
-        },
-        volume: -40
+    // 1. Give it a massive bass boost to physically rattle the phone speaker
+    const eq = new Tone.EQ3({
+        low: 14,   // +14dB on lows (Max bass)
+        mid: 2,    // slight mid presence
+        high: 4    // crisp high reeds
     }).toDestination();
+
+    // 2. Add a thick compressor so the heavy bass and loud volume don't clip into distortion
+    const compressor = new Tone.Compressor(-15, 6).connect(eq);
+
+    // 3. PolySynth allows chords/glissando perfectly.
+    // 'fatsawtooth' emulates a French Musette accordion (multiple reeds slightly detuned)
+    synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: {
+            type: 'fatsawtooth',
+            count: 3,        // 3 stacked reeds per note
+            spread: 20       // detuned for the classic accordion wobble
+        },
+        envelope: {
+            attack: 0.05,
+            decay: 0.2,
+            sustain: 0.9,
+            release: 0.4
+        }
+    }).connect(compressor);
+
+    // Start heavily down to prevent initial pops
+    synth.volume.value = -40;
 }
 
 function playNote(note) {
@@ -90,8 +108,10 @@ function stopNote(note) {
 
 function setVolume(speed) {
     if (!synth) return;
-    // Convert 0–1 speed to decibels: -40db (silent) to -5db (loud)
-    const db = -40 + speed * 35;
+
+    // Pushed up the master volume mapping. 
+    // Old max was -5dB. New max is +5dB (10dB louder overall)
+    const db = -35 + speed * 40;
     synth.volume.rampTo(db, 0.05); // smooth 50ms ramp
 
     const statusVal = document.getElementById('val-status');
