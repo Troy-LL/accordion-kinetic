@@ -26,16 +26,30 @@
     -webkit-user-select: none;
   }
   
-  /* ─── FORCE LANDSCAPE ─────────────────────────────── */
+  /* ─── PORTRAIT OPTIMIZATION (no forced landscape) ─── */
   @media screen and (orientation: portrait) {
-    body {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      width: 100dvh;
-      height: 100dvw;
-      transform: translate(-50%, -50%) rotate(90deg);
-      transform-origin: center center;
+    .play-ui {
+      padding: 1dvh 2dvw;
+      justify-content: flex-start;
+      gap: 1.5dvh;
+    }
+
+    #bellows {
+      width: clamp(70px, 24vw, 150px);
+      height: clamp(60px, 14dvh, 130px);
+    }
+
+    #meter {
+      width: 96%;
+      height: clamp(4px, 0.9dvh, 10px);
+    }
+
+    .key-white {
+      height: clamp(46px, 20dvh, 150px);
+    }
+
+    .key-black {
+      height: clamp(34px, 14dvh, 110px);
     }
   }
   
