@@ -31,21 +31,22 @@
     .play-ui {
       width: 100%;
       height: 100dvh;
-      padding: 1.5dvh 1.5dvw;
+      padding: 1.5dvh 0.8dvw;
       flex-direction: row;           /* bellows on left, keys on side */
-      align-items: center;
-      justify-content: space-between;
-      gap: 2dvw;
+      align-items: stretch;
+      justify-content: flex-start;   /* stick content to the left edge */
+      gap: 1.2dvw;
     }
 
     #bellows {
-      width: clamp(80px, 26vw, 160px);
+      width: clamp(78px, 24vw, 150px);
       height: clamp(80px, 30dvh, 190px);
       flex-shrink: 0;
+      margin-left: 0;
     }
 
     #meter {
-      width: 80%;
+      width: 82%;
       height: clamp(4px, 1dvh, 8px);
       margin-top: 1dvh;
     }
@@ -61,11 +62,11 @@
     }
 
     .key-white {
-      height: clamp(52px, 24dvh, 160px);
+      height: clamp(50px, 24dvh, 160px);
     }
 
     .key-black {
-      height: clamp(40px, 20dvh, 130px);
+      height: clamp(38px, 20dvh, 130px);
     }
   }
   
