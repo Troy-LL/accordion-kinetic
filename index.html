@@ -1,87 +1,117 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Accordion Kinetic — Physical Motion UI</title>
-    <meta name="description"
-        content="A motion-driven accordion instrument utilizing device sensors and brutalist aesthetics.">
-
-    <!-- Typography -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap"
-        rel="stylesheet">
-
-    <link rel="stylesheet" href="style.css">
-
-    <!-- PWA / Mobile optimization -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
-    <!-- Audio Engine -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Accordion Kinetic</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 </head>
-
 <body>
-    <main class="app-container">
-        <header class="app-header">
-            <img src="assets/logo.png" alt="Kinetic Logo" class="app-logo">
-            <h1 class="glitch-text" data-text="ACCORDION">ACCORDION</h1>
-            <p class="status-indicator">SYSTEM READY — TILT TO ACTIVATE BELLOWS</p>
-        </header>
 
-        <!-- Bellows visual: Represents sensor intensity -->
-        <div id="bellows">
-            <div id="bellows-inner"></div>
+  <!-- PLAY UI — hidden until after init -->
+  <main class="play-ui" id="play-ui" style="display:none;">
+
+    <div id="bellows">
+      <div id="bellows-inner"></div>
+    </div>
+
+    <div id="meter">
+      <div id="meter-fill"></div>
+    </div>
+
+    <!-- Two octaves: C4–B4 whites + sharps, C5–B5 whites + sharps, root C6 -->
+    <div id="keys-container">
+
+      <!-- Octave 1 sharps -->
+      <div class="row row-sharps" id="sharps-1">
+        <div class="key-slot">
+          <button class="key key-black" data-note="C#4">C#</button>
         </div>
-
-        <!-- Volume meter: Real-time audio feedback -->
-        <div id="meter">
-            <div id="meter-fill"></div>
+        <div class="key-slot">
+          <button class="key key-black" data-note="D#4">D#</button>
         </div>
-
-        <!-- Chromatic Button Board -->
-        <div id="keys-container">
-            <div class="row row-top">
-                <button class="key key-black" data-note="C#4"></button>
-                <button class="key key-black" data-note="D#4"></button>
-                <div class="spacer"></div>
-                <button class="key key-black" data-note="F#4"></button>
-                <button class="key key-black" data-note="G#4"></button>
-                <button class="key key-black" data-note="A#4"></button>
-            </div>
-            <div class="row row-bottom">
-                <button class="key key-white" data-note="C4">C</button>
-                <button class="key key-white" data-note="D4">D</button>
-                <button class="key key-white" data-note="E4">E</button>
-                <button class="key key-white" data-note="F4">F</button>
-                <button class="key key-white" data-note="G4">G</button>
-                <button class="key key-white" data-note="A4">A</button>
-                <button class="key key-white" data-note="B4">B</button>
-                <button class="key key-white" data-note="C5">C</button>
-            </div>
+        <div class="key-slot spacer"></div>
+        <div class="key-slot">
+          <button class="key key-black" data-note="F#4">F#</button>
         </div>
-
-        <!-- Permission prompt (Mandatory iOS user gesture) -->
-        <div id="permission-screen">
-            <div class="overlay-content">
-                <p>KINETIC PERMISSION REQUIRED</p>
-                <button id="start-btn" class="btn-action">TAP TO START SYSTEM</button>
-            </div>
+        <div class="key-slot">
+          <button class="key key-black" data-note="G#4">G#</button>
         </div>
+        <div class="key-slot">
+          <button class="key key-black" data-note="A#4">A#</button>
+        </div>
+        <div class="key-slot spacer"></div>
+        <!-- Octave 2 sharps inline -->
+        <div class="key-slot">
+          <button class="key key-black" data-note="C#5">C#</button>
+        </div>
+        <div class="key-slot">
+          <button class="key key-black" data-note="D#5">D#</button>
+        </div>
+        <div class="key-slot spacer"></div>
+        <div class="key-slot">
+          <button class="key key-black" data-note="F#5">F#</button>
+        </div>
+        <div class="key-slot">
+          <button class="key key-black" data-note="G#5">G#</button>
+        </div>
+        <div class="key-slot">
+          <button class="key key-black" data-note="A#5">A#</button>
+        </div>
+        <div class="key-slot spacer"></div>
+      </div>
 
-        <footer class="app-footer">
-            <div class="sensor-info">
-                <span>INTENSITY: <em id="val-intensity">0.00</em></span>
-                <span>NOTE: <em id="val-note">—</em></span>
-                <span>STATUS: <em id="val-status">IDLE</em></span>
-            </div>
-        </footer>
-    </main>
+      <!-- All whites: C4 through C6 = 15 notes -->
+      <div class="row row-whites">
+        <button class="key key-white" data-note="C4">C</button>
+        <button class="key key-white" data-note="D4">D</button>
+        <button class="key key-white" data-note="E4">E</button>
+        <button class="key key-white" data-note="F4">F</button>
+        <button class="key key-white" data-note="G4">G</button>
+        <button class="key key-white" data-note="A4">A</button>
+        <button class="key key-white" data-note="B4">B</button>
+        <button class="key key-white" data-note="C5">C</button>
+        <button class="key key-white" data-note="D5">D</button>
+        <button class="key key-white" data-note="E5">E</button>
+        <button class="key key-white" data-note="F5">F</button>
+        <button class="key key-white" data-note="G5">G</button>
+        <button class="key key-white" data-note="A5">A</button>
+        <button class="key key-white" data-note="B5">B</button>
+        <button class="key key-white" data-note="C6">C</button>
+      </div>
 
-    <script src="app.js"></script>
+    </div>
+
+    <!-- Recalibrate: only shows when no notes playing -->
+    <button id="recalibrate-btn">↺ Recalibrate</button>
+
+  </main>
+
+  <!-- INIT SCREEN — full screen, disappears after tap -->
+  <div id="permission-screen">
+    <div class="overlay-content">
+      <p class="init-instruction">Hold phone landscape,<br>parallel to the floor,<br>screen facing up.</p>
+      <div id="stability-ring">
+        <svg viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="42" fill="none" stroke="#333" stroke-width="6"/>
+          <circle id="stability-arc" cx="50" cy="50" r="42" fill="none"
+            stroke="#e74c3c" stroke-width="6"
+            stroke-dasharray="0 264"
+            stroke-linecap="round"
+            transform="rotate(-90 50 50)"/>
+        </svg>
+        <span id="stability-label">HOLD STILL</span>
+      </div>
+      <button id="start-btn">TAP TO BEGIN</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
 </body>
-
 </html>
