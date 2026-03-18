@@ -193,6 +193,37 @@
     box-shadow: 0 1px 0 rgba(0,0,0,0.8), inset 0 3px 6px rgba(0,0,0,0.5);
   }
   
+  /* ─── SMALL LANDSCAPE PHONES TUNING ────────────────── */
+  /* When the viewport height is very small (short phones
+     in landscape), shrink bellows + meter so all keys
+     stay inside the screen while remaining tappable. */
+  @media (max-height: 460px) {
+    #bellows {
+      width: clamp(70px, 14vw, 130px);
+      height: clamp(60px, 14dvh, 130px);
+    }
+
+    #meter {
+      height: clamp(4px, 0.8dvh, 8px);
+      width: 90%;
+    }
+
+    .key-white {
+      height: clamp(46px, 22dvh, 140px);
+      font-size: clamp(9px, 2vw, 16px);
+    }
+
+    .key-black {
+      height: clamp(34px, 16dvh, 110px);
+      font-size: clamp(7px, 1.5vw, 11px);
+    }
+
+    #recalibrate-btn {
+      bottom: 1dvh;
+      right: 1.5vw;
+    }
+  }
+
   /* ─── RECALIBRATE ─────────────────────────────────── */
   #recalibrate-btn {
     position: fixed;
