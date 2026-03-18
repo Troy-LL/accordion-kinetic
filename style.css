@@ -26,60 +26,50 @@
     -webkit-user-select: none;
   }
   
-  /* ─── PORTRAIT OPTIMIZATION (no forced landscape) ─── */
+  /* ─── PORTRAIT OPTIMIZATION (side‑by‑side layout) ─── */
   @media screen and (orientation: portrait) {
     .play-ui {
       width: 100%;
       height: 100dvh;
-      padding: 1.5dvh 1.5dvw;
+      padding: 1.5dvh 1dvw;
       display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      justify-content: flex-start;
-      position: relative;
-      overflow: hidden;
+      flex-direction: row;          /* bellows on left, keys on right */
+      align-items: center;
+      justify-content: flex-start;  /* stick content to the left edge */
+      gap: 1.5dvw;
     }
 
     #bellows {
-      width: clamp(70px, 24vw, 140px);
-      height: clamp(60px, 16dvh, 130px);
+      width: clamp(78px, 24vw, 150px);
+      height: clamp(70px, 24dvh, 160px);
       flex-shrink: 0;
       margin-left: 0;
-      margin-bottom: 1.5dvh;
     }
 
     #meter {
-      width: 60%;
-      height: clamp(4px, 0.9dvh, 8px);
-      margin-top: 0.5dvh;
-      margin-bottom: 0;
+      width: 80%;
+      height: clamp(4px, 1dvh, 8px);
+      margin-top: 1dvh;
     }
 
-    /* Rotate keys so they run vertically along the right side
-       while the phone is upright. */
     #keys-container {
-      position: absolute;
-      right: -8dvh;                  /* pull slightly off-screen to compensate for rotation */
-      bottom: 3dvh;
-      width: 80dvh;                  /* length of the keyboard (now horizontal before rotation) */
-      height: 40dvw;
+      flex: 1;
+      height: 100%;
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
-      transform: rotate(-90deg);
-      transform-origin: 100% 100%;   /* rotate around bottom-right corner */
     }
 
     .row-whites {
-      gap: clamp(1px, 0.5vw, 4px);
+      gap: clamp(1px, 0.6vw, 4px);
     }
 
     .key-white {
-      height: clamp(44px, 18dvh, 140px);
+      height: clamp(50px, 24dvh, 160px);
     }
 
     .key-black {
-      height: clamp(34px, 14dvh, 110px);
+      height: clamp(38px, 20dvh, 130px);
     }
   }
   
