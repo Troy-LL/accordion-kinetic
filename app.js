@@ -21,7 +21,6 @@ let lastCombinedTilt = null;
 let stabilityReadings = [];
 const STABILITY_WINDOW  = 12;   // number of readings to average
 const STABILITY_THRESH  = 0.8;  // max variance to be considered "still"
-
 // Active keys (multi-touch chords)
 const activeKeys = new Set();
 
