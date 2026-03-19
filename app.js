@@ -579,8 +579,16 @@ function applyChordVoicing() {
 // ─── VISUALS ──────────────────────────────────────────────────────────────────
 function updateVisuals(speed) {
   const scale = 0.3 + speed * 0.7;
-  document.getElementById('bellows-inner').style.transform = `scaleY(${scale})`;
-  document.getElementById('meter-fill').style.width = `${speed * 100}%`;
+
+  const bellowsInner = document.getElementById('bellows-inner');
+  if (bellowsInner) {
+    bellowsInner.style.transform = `scaleY(${scale})`;
+  }
+
+  const meterFill = document.getElementById('meter-fill');
+  if (meterFill) {
+    meterFill.style.width = `${speed * 100}%`;
+  }
 }
 
 // ─── KEYS & MULTI-TOUCH ───────────────────────────────────────────────────────
