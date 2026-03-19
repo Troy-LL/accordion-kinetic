@@ -80,7 +80,8 @@ async function requestPermissionsAndStart() {
 
   } catch (err) {
     console.error('Init failed:', err);
-    alert('Audio init failed. Make sure volume is up and try again.');
+    const detail = err && err.message ? `\n\nDetails: ${err.message}` : '';
+    alert('Audio init failed. Make sure volume is up and try again.' + detail);
   }
 }
 
