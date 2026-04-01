@@ -1,4 +1,4 @@
-# 🪗 Accordion Kinetic
+# Accordion Kinetic
 
 [![Aesthetic: Premium](https://img.shields.io/badge/Aesthetic-Premium-FF69B4.svg)](#)
 [![JS: Vanilla](https://img.shields.io/badge/JS-Vanilla-F7DF1E.svg)](#)
