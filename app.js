@@ -492,6 +492,20 @@ function onOrientation(e) {
        // Scale volume too: Silent if not bowing! 
        let synthVol = safeSmoothed < 0.1 ? -40 : -20 + (safeSmoothed * 20); 
        celloSynth.volume.rampTo(synthVol, 0.05);
+
+       // Debounced Trigger Attack (Ghost Note Fix)
+       if (safeSmoothed > 0.15 && !celloIsAttacking) {
+           const now = Date.now();
+           if (now - celloLastBiteTime > 150) { // 150ms debounce
+               celloSynth.triggerAttack(celloTargetFreq);
+               celloIsAttacking = true;
+               celloLastBiteTime = now;
+           }
+       } else if (safeSmoothed < 0.08 && celloIsAttacking) {
+           // Release string tension if bowing entirely stops
+           celloSynth.triggerRelease();
+           celloIsAttacking = false;
+       }
     }
 
     // Vibrato Gyro (Phase 12.2)
@@ -520,19 +534,15 @@ function initAudio() {
   const compressor = new Tone.Compressor(-15, 6).connect(eq);
   const chorus = new Tone.Chorus(4, 2.5, 0.5).connect(compressor).start();
 
-  reverb = new Tone.Reverb({ decay: 2.5, preDelay: 0.1, wet: 0.4 });
-  reverb.connect(chorus);
-  reverbWetBase = 0.4;
-
   // Highpass — used for PUSH (bright), chord-dependent cutoff
   highpassFilter = new Tone.Filter(400, 'highpass');
   highpassFilter.rolloff = -12;
-  highpassFilter.connect(reverb);
+  highpassFilter.connect(chorus);
 
   // Lowpass — used for PULL (warm), chord-dependent cutoff
   lowpassFilter = new Tone.Filter(1200, 'lowpass');
   lowpassFilter.rolloff = -12;
-  lowpassFilter.connect(reverb);
+  lowpassFilter.connect(chorus);
 
   // Crossfade between push/pull paths to avoid clicks.
   pushGain = new Tone.Gain(0);
@@ -540,9 +550,9 @@ function initAudio() {
   pushGain.connect(highpassFilter);
   pullGain.connect(lowpassFilter);
 
-  // PolySynth — French Musette accordion character
+  // PolySynth — French Musette accordion character with custom 'DNA' partials
   synth = new Tone.PolySynth(Tone.Synth, {
-    oscillator: { type: 'fatsawtooth', count: 3, spread: 25 },
+    oscillator: { type: 'custom', partials: [1, 0.1, 0.8, 0.1, 0.6, 0.1] },
     envelope:   { attack: 0.05, decay: 0.2, sustain: 0.9, release: 0.4 }
   });
   synth.connect(pushGain);
@@ -976,36 +986,48 @@ let celloFilter = null;
 let celloLfo = null;
 let celloActiveNote = false;
 let celloTargetFreq = null;
+let celloLastBiteTime = 0;
+let celloIsAttacking = false;
+
+let celloNoise = null;
 
 function initCelloAudio() {
   if (celloSynth) return;
+
+  // Formant Filter for wooden resonance
+  const formantFilter = new Tone.Filter({
+    type: "peaking",
+    frequency: 450,
+    Q: 2,
+    gain: 6
+  }).toDestination();
 
   celloFilter = new Tone.Filter({
     type: "lowpass",
     frequency: 200,
     rolloff: -24,
     Q: 2
-  }).toDestination();
+  }).connect(formantFilter);
 
-  // Sawtooth foundation
+  // Custom Waveform DNA
   celloSynth = new Tone.Synth({
-    oscillator: { type: 'sawtooth' },
+    oscillator: { type: 'custom', partials: [1, 0.4, 0.3, 0.2, 0.1, 0.05] },
     envelope: { attack: 0.1, decay: 0.2, sustain: 1.0, release: 0.5 }
   }).connect(celloFilter);
 
+  // Transient Bite layer
+  celloNoise = new Tone.NoiseSynth({
+    noise: { type: 'white' },
+    envelope: { attack: 0.001, decay: 0.01, sustain: 0, release: 0 }
+  }).connect(formantFilter);
+
   celloLfo = new Tone.LFO({
     type: "sine",
-    min: -15, // vibrato depth
-    max: 15,
+    min: -10, // vibrato depth
+    max: 10,
     frequency: 5
   }).start();
   celloLfo.connect(celloSynth.detune);
-
-  // Apply reverb for the Cello
-  if (!reverb) {
-     reverb = new Tone.Reverb({ decay: 3.5, preDelay: 0.1, wet: 0.5 }).toDestination();
-  }
-  celloFilter.connect(reverb);
 }
 
 // Map Y touch to semitone (0-24 for a 2 octave range)
@@ -1068,13 +1090,16 @@ function setupCelloFingerboard() {
     const touch = e.touches[0];
     updateCelloPitch(touch.clientY);
     celloActiveNote = true;
+    celloIsAttacking = false;
     
     indicator.style.opacity = '1';
     indicator.style.top = (touch.clientY - board.getBoundingClientRect().top) + 'px';
     
-    // Attack but keep filter closed until movement (Phase 13.2 "Bite Key")
+    // 10ms Bite Transient for Cello Bow
+    celloNoise.triggerAttackRelease(0.01);
+    
+    // Keep sustaining string filter closed until movement
     celloFilter.frequency.value = 50; 
-    celloSynth.triggerAttack(celloTargetFreq);
   });
   
   board.addEventListener('touchmove', (e) => {
@@ -1088,6 +1113,7 @@ function setupCelloFingerboard() {
     e.preventDefault();
     if (e.touches.length === 0) {
       celloActiveNote = false;
+      celloIsAttacking = false;
       celloSynth.triggerRelease();
       indicator.style.opacity = '0';
     }
