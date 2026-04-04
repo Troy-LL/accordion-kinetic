@@ -52,9 +52,10 @@ let wakeLock = null;
 
 // ─── BOOT: Start button ───────────────────────────────────────────────────────
 document.getElementById('start-btn').addEventListener('click', async () => {
-  // Fire off camera request, then wait for orientation permissions
-  await initCamera();
+  // FAST-PATH: iOS requires orientation permissions to be the very first 
+  // asynchronous action in a click handler to preserve the user gesture.
   await requestPermissionsAndStart();
+  await initCamera();
 });
 
 async function requestPermissionsAndStart() {
