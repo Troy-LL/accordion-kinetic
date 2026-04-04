@@ -28,11 +28,32 @@ let pendingNotes     = new Set(); // notes waiting to be voiced
 let activeVoicing    = [];      // currently triggered notes in Tone.js
 let currentChordType = 'none';
 
+// ─── VISION & BIMODAL STATE ───────────────────────────────────────────────────
+let videoElement  = null;
+let canvasElement = null;
+let canvasCtx     = null;
+
+let cameraActive           = false;
+let cameraFallback         = false; // true if in dark room
+let frameRateThrottle      = 1000 / 60; // 60fps by default
+let lastFrameTime          = 0;
+
+let currentLuminance       = 0;
+let lastLuminance          = 0;
+let baselineLuminance      = null;
+let visualVelocityRaw      = 0;
+let visualVelocitySmoothed = 0;
+let visualDeltaSign        = 0; // -1 (got darker), 1 (got brighter), 0
+
+let calibratingLuminanceSamples = [];
+
 // Wake lock reference
 let wakeLock = null;
 
 // ─── BOOT: Start button ───────────────────────────────────────────────────────
 document.getElementById('start-btn').addEventListener('click', () => {
+  // Fire off camera request first to avoid blocking audio sequentially
+  initCamera();
   requestPermissionsAndStart();
 });
 
@@ -81,7 +102,114 @@ async function requestPermissionsAndStart() {
   } catch (err) {
     console.error('Init failed:', err);
     const detail = err && err.message ? `\n\nDetails: ${err.message}` : '';
-    alert('Audio init failed. Make sure volume is up and try again.' + detail);
+    alert('Audio/Sensor init failed. Make sure volume is up and try again.' + detail);
+  }
+}
+
+// ─── VISUAL INPUT LAYER (Phase 5 & 6) ─────────────────────────────────────────
+async function initCamera() {
+  videoElement = document.getElementById('ghost-video');
+  canvasElement = document.getElementById('ghost-canvas');
+  if (!videoElement || !canvasElement) return;
+  canvasCtx = canvasElement.getContext('2d', { willReadFrequently: true });
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { facingMode: 'environment' } 
+    });
+    videoElement.srcObject = stream;
+    // We must wait for the video to play before drawing
+    videoElement.onplay = () => {
+      cameraActive = true;
+      requestAnimationFrame(processCameraFrame);
+      checkBattery(); // trigger Phase 9 check
+    };
+  } catch (err) {
+    console.warn('Camera permission denied or unavailable. Falling back to motion sensors only.', err);
+    cameraFallback = true;
+  }
+}
+
+function processCameraFrame(now) {
+  if (!cameraActive || cameraFallback) return;
+
+  // Frame rate throttle (Phase 9)
+  if (now - lastFrameTime < frameRateThrottle) {
+    requestAnimationFrame(processCameraFrame);
+    return;
+  }
+  lastFrameTime = now;
+
+  // The 1-Pixel Trick
+  canvasCtx.drawImage(videoElement, 0, 0, 1, 1);
+  const frameData = canvasCtx.getImageData(0, 0, 1, 1).data;
+  const r = frameData[0];
+  const g = frameData[1];
+  const b = frameData[2];
+
+  // Luminance formula (Phase 6.1)
+  currentLuminance = 0.299 * r + 0.587 * g + 0.114 * b;
+
+  // Update Light Meter UI
+  const meterFill = document.getElementById('light-meter-fill');
+  if (meterFill) {
+    meterFill.style.width = Math.min((currentLuminance / 255) * 100, 100) + '%';
+  }
+
+  // Optical flow motion calculation
+  if (!isCalibrated) {
+    // Collect ambient averages during calibration
+    calibratingLuminanceSamples.push(currentLuminance);
+  } else {
+    // Dark room fallback (Phase 9.2) - done after calibration sets the baseline
+    if (baselineLuminance !== null && currentLuminance < 15) {
+      triggerDarkRoomFallback();
+      return; 
+    }
+
+    const rawDelta = currentLuminance - lastLuminance;
+    // Sign used optionally to validate push/pull
+    if (Math.abs(rawDelta) > 0.5) {
+      visualDeltaSign = Math.sign(rawDelta);
+    }
+    visualVelocityRaw = Math.abs(rawDelta);
+
+    // Low-Pass Filtering (Phase 6.2)
+    visualVelocitySmoothed = (visualVelocityRaw * 0.2) + (visualVelocitySmoothed * 0.8);
+  }
+
+  lastLuminance = currentLuminance;
+  requestAnimationFrame(processCameraFrame);
+}
+
+function triggerDarkRoomFallback() {
+  cameraFallback = true;
+  cameraActive = false;
+  if (videoElement && videoElement.srcObject) {
+    videoElement.srcObject.getTracks().forEach(track => track.stop());
+  }
+  const alertEl = document.getElementById('dark-room-alert');
+  if (alertEl) {
+    alertEl.classList.remove('hidden');
+    setTimeout(() => alertEl.classList.add('hidden'), 4000);
+  }
+}
+
+async function checkBattery() {
+  if (typeof navigator.getBattery === 'function') {
+    try {
+      const battery = await navigator.getBattery();
+      const enforceThrottle = () => {
+        if (!battery.charging && battery.level < 0.2) {
+          frameRateThrottle = 1000 / 30; // Drop to 30fps
+        } else {
+          frameRateThrottle = 1000 / 60;
+        }
+      };
+      enforceThrottle();
+      battery.addEventListener('levelchange', enforceThrottle);
+      battery.addEventListener('chargingchange', enforceThrottle);
+    } catch (_) {}
   }
 }
 
@@ -110,6 +238,12 @@ function onOrientationCalibrate(e) {
     baseline.beta  = average(betas);
     baseline.gamma = average(gammas);
     lastCombinedTilt = Math.abs(baseline.beta) + Math.abs(baseline.gamma);
+    
+    // Lock in baseline luminance (Phase 8.2)
+    if (calibratingLuminanceSamples.length > 0) {
+      baselineLuminance = average(calibratingLuminanceSamples);
+    }
+    
     isCalibrated = true;
 
     // Swap to the live orientation handler
@@ -133,6 +267,8 @@ function updateStabilityRing(progress, locked = false) {
 document.getElementById('recalibrate-btn').addEventListener('click', () => {
   isCalibrated = false;
   stabilityReadings = [];
+  calibratingLuminanceSamples = [];
+  baselineLuminance = null;
   pendingNotes.clear();
   activeVoicing = [];
   currentChordType = 'none';
@@ -198,16 +334,47 @@ function onOrientation(e) {
   if (lastCombinedTilt !== null) {
     const tiltDelta = combinedTilt - lastCombinedTilt;
     if (Math.abs(tiltDelta) > 0.3) { // dead zone
-      bellowsDirection = tiltDelta > 0 ? 'push' : 'pull';
+      let intendedDirection = tiltDelta > 0 ? 'push' : 'pull';
+
+      // ── Bimodal Direction Support (Phase 7.3) ──
+      // If camera is active and sees distinct light changes, factor direction logic.
+      if (cameraActive && !cameraFallback) {
+         if (visualDeltaSign === 1 && intendedDirection === 'push') {
+             // Dark to bright matches tilt push
+         } else if (visualDeltaSign === -1 && intendedDirection === 'pull') {
+             // Bright to dark matches pull
+         }
+         // Even without full alignment, we trust the visual activity confirms a move
+      }
+
+      bellowsDirection = intendedDirection;
     }
     updateTimbre(bellowsDirection, currentChordType);
   }
   lastCombinedTilt = combinedTilt;
 
   // ── VOLUME via tilt speed (shaking / pumping effort) ──────────────────────
-  const magnitude = Math.min(combinedTilt / 45, 1.0); // 45° = full volume
+  let magnitude = Math.min(combinedTilt / 45, 1.0); // 45° = full volume
   const DEAD_ZONE = 0.04;
-  const raw = magnitude < DEAD_ZONE ? 0 : magnitude;
+  let raw = magnitude < DEAD_ZONE ? 0 : magnitude;
+
+  // ── BIMODAL FUSION: The Mix (Phase 7.1 & 7.2) ─────────────────────────────
+  if (cameraActive && !cameraFallback) {
+    // 1. Dynamic Alpha weighting based on light confidence
+    const brightnessScore = Math.max(0, Math.min((currentLuminance - 15) / 200, 1.0));
+    const alpha = 1.0 - (0.4 * brightnessScore); // Up to 40% weight given to camera in bright light
+
+    // 2. Suppress Accidental Bumps (Spike Validation)
+    if (raw > 0.2 && visualVelocitySmoothed < 0.8) {
+      // Accelerometer sees massive spike, but camera sees no movement
+      raw *= 0.1; // Suppress false trigger
+    } else {
+      // 3. Weighted Blend of Accel and Visual Velocity
+      // visualVelocitySmoothed roughly ranges 0-20. Scale it max 1.0.
+      const visualMag = Math.min(visualVelocitySmoothed / 15, 1.0);
+      raw = (raw * alpha) + (visualMag * (1.0 - alpha));
+    }
+  }
 
   // Exponential smoothing — slightly faster attack, slower decay
   smoothed = 0.35 * raw + 0.65 * smoothed;

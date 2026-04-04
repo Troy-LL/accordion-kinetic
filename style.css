@@ -311,3 +311,59 @@
     transform: scale(1.04);
     box-shadow: 0 10px 28px rgba(231,76,60,0.5);
   }
+
+  /* ─── AMBIENT LIGHT METER ─────────────────────────── */
+  #light-meter-container {
+    width: 100%;
+    max-width: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  #light-meter-label {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    color: rgba(255,255,255,0.5);
+  }
+
+  #light-meter-track {
+    width: 100%;
+    height: 8px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  #light-meter-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--accent);
+    transition: width 0.1s ease-out;
+  }
+
+  /* ─── DARK ROOM ALERT ─────────────────────────────── */
+  #dark-room-alert {
+    position: fixed;
+    top: 5vh;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(146, 43, 33, 0.9);
+    color: white;
+    padding: 0.8rem 1.5rem;
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    z-index: 2000;
+    transition: opacity 0.5s ease-in-out;
+    pointer-events: none;
+    text-align: center;
+  }
+
+  #dark-room-alert.hidden {
+    opacity: 0;
+  }

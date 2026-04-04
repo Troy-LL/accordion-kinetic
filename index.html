@@ -105,9 +105,27 @@
         </svg>
         <span id="stability-label">HOLD STILL</span>
       </div>
+
+      <!-- Ambient Light Meter UI -->
+      <div id="light-meter-container">
+        <span id="light-meter-label">AMBIENT LIGHT</span>
+        <div id="light-meter-track">
+          <div id="light-meter-fill"></div>
+        </div>
+      </div>
+
       <button id="start-btn">TAP TO BEGIN</button>
     </div>
   </div>
+
+  <!-- Low Light Fallback Alert -->
+  <div id="dark-room-alert" class="hidden">
+    Low light—reverting to Motion Sensors only.
+  </div>
+
+  <!-- Ghost Canvas for 1-Pixel Camera Output -->
+  <video id="ghost-video" autoplay playsinline style="display:none;"></video>
+  <canvas id="ghost-canvas" width="1" height="1" style="display:none;"></canvas>
 
   <script src="app.js"></script>
 </body>
