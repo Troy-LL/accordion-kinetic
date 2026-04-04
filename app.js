@@ -50,6 +50,59 @@ let calibratingLuminanceSamples = [];
 // Wake lock reference
 let wakeLock = null;
 
+// ─── LOBBY & APP STATE ────────────────────────────────────────────────────────
+let activeInstrumentMode = null; // 'accordion' or 'cello'
+let scaleLockEnabled = true;
+let celloKey = 'D';
+let celloScaleName = 'major';
+
+document.getElementById('mode-accordion-btn').addEventListener('click', () => {
+  activeInstrumentMode = 'accordion';
+  showPermissionScreen();
+});
+
+document.getElementById('mode-cello-btn').addEventListener('click', () => {
+  activeInstrumentMode = 'cello';
+  document.getElementById('cello-settings').style.display = 'flex';
+});
+
+document.getElementById('cello-start-btn').addEventListener('click', () => {
+  celloKey = document.getElementById('cello-key').value;
+  celloScaleName = document.getElementById('cello-scale').value;
+  scaleLockEnabled = document.getElementById('scale-lock').checked;
+  showPermissionScreen();
+});
+
+document.getElementById('back-to-lobby-btn').addEventListener('click', () => {
+  isCalibrated = false;
+  cameraActive = false;
+  window.removeEventListener('deviceorientation', onOrientation);
+  window.removeEventListener('deviceorientation', onOrientationCalibrate);
+  if (synth) synth.releaseAll();
+  if (celloSynth) celloSynth.triggerRelease();
+  
+  if (videoElement && videoElement.srcObject) {
+    videoElement.srcObject.getTracks().forEach(track => track.stop());
+  }
+
+  document.getElementById('play-ui').style.display = 'none';
+  document.getElementById('back-to-lobby-btn').style.display = 'none';
+  document.getElementById('start-screen').style.display = 'flex';
+});
+
+function showPermissionScreen() {
+  document.getElementById('start-screen').style.display = 'none';
+  document.getElementById('permission-screen').style.display = 'flex';
+  
+  // Custom Calibration Stance Update
+  const instruction = document.querySelector('.init-instruction');
+  if (activeInstrumentMode === 'accordion') {
+    instruction.innerHTML = 'Hold phone landscape,<br>parallel to the floor,<br>screen facing up.';
+  } else {
+    instruction.innerHTML = 'Hold phone upright,<br>slightly tilted towards you,<br>like playing a cello.';
+  }
+}
+
 // ─── BOOT: Start button ───────────────────────────────────────────────────────
 document.getElementById('start-btn').addEventListener('click', async () => {
   // FAST-PATH: iOS requires orientation permissions to be the very first 
@@ -81,8 +134,21 @@ async function requestPermissionsAndStart() {
 
   try {
     await Tone.start();
-    initAudio();
-    setupKeys();
+    
+    if (activeInstrumentMode === 'accordion') {
+      initAudio();
+      setupKeys();
+      document.getElementById('keys-container').style.display = 'flex';
+      document.getElementById('cello-fingerboard').style.display = 'none';
+      document.getElementById('bellows').style.display = 'block';
+    } else {
+      initCelloAudio();
+      setupCelloFingerboard();
+      document.getElementById('keys-container').style.display = 'none';
+      document.getElementById('cello-fingerboard').style.display = 'block';
+      document.getElementById('bellows').style.display = 'none';
+    }
+
     isStarted = true;
 
     if (sensorGranted) {
@@ -259,6 +325,7 @@ function onOrientationCalibrate(e) {
     setTimeout(() => {
       document.getElementById('permission-screen').style.display = 'none';
       document.getElementById('play-ui').style.display = 'flex';
+      document.getElementById('back-to-lobby-btn').style.display = 'block';
     }, 800);
   }
 }
@@ -334,76 +401,107 @@ function onOrientation(e) {
   // Delta from calibrated baseline
   const deltaBeta  = e.beta  - baseline.beta;
   const deltaGamma = e.gamma - baseline.gamma;
-
-  // Combined tilt magnitude from baseline
   const combinedTilt = Math.abs(deltaBeta) + Math.abs(deltaGamma);
 
-  // ── PUSH / PULL DIRECTION ──────────────────────────────────────────────────
-  // Positive delta = tilting toward you (push), negative = away (pull)
-  if (lastCombinedTilt !== null) {
-    const tiltDelta = combinedTilt - lastCombinedTilt;
-    if (Math.abs(tiltDelta) > 0.3) { // dead zone
-      let intendedDirection = tiltDelta > 0 ? 'push' : 'pull';
+  if (activeInstrumentMode === 'accordion') {
+    // ── PUSH / PULL DIRECTION ──────────────────────────────────────────────────
+    if (lastCombinedTilt !== null) {
+      const tiltDelta = combinedTilt - lastCombinedTilt;
+      if (Math.abs(tiltDelta) > 0.3) {
+        let intendedDirection = tiltDelta > 0 ? 'push' : 'pull';
 
-      // ── Bimodal Direction Support (Phase 7.3) ──
-      // If camera is active and sees distinct light changes, factor direction logic.
-      if (cameraActive && !cameraFallback) {
-         if (visualDeltaSign === 1 && intendedDirection === 'push') {
-             // Dark to bright matches tilt push
-         } else if (visualDeltaSign === -1 && intendedDirection === 'pull') {
-             // Bright to dark matches pull
-         }
-         // Even without full alignment, we trust the visual activity confirms a move
+        if (cameraActive && !cameraFallback) {
+           if (visualDeltaSign === 1 && intendedDirection === 'push') {
+           } else if (visualDeltaSign === -1 && intendedDirection === 'pull') {
+           }
+        }
+        bellowsDirection = intendedDirection;
+      }
+      updateTimbre(bellowsDirection, currentChordType);
+    }
+    lastCombinedTilt = combinedTilt;
+
+    // ── VOLUME via tilt speed (shaking / pumping effort) ──────────────────────
+    let magnitude = Math.min(combinedTilt / 45, 1.0);
+    const DEAD_ZONE = 0.04;
+    let raw = magnitude < DEAD_ZONE ? 0 : magnitude;
+
+    // ── BIMODAL FUSION: The Mix (Phase 7.1 & 7.2) ─────────────────────────────
+    if (cameraActive && !cameraFallback) {
+      const brightnessScore = Math.max(0, Math.min((currentLuminance - 15) / 200, 1.0));
+      const alpha = 1.0 - (0.4 * brightnessScore);
+
+      if (raw > 0.2 && visualVelocitySmoothed < 0.8) {
+        raw *= 0.1;
+      } else {
+        const visualMag = Math.min(visualVelocitySmoothed / 15, 1.0);
+        raw = (raw * alpha) + (visualMag * (1.0 - alpha));
       }
 
-      bellowsDirection = intendedDirection;
-    }
-    updateTimbre(bellowsDirection, currentChordType);
-  }
-  lastCombinedTilt = combinedTilt;
-
-  // ── VOLUME via tilt speed (shaking / pumping effort) ──────────────────────
-  let magnitude = Math.min(combinedTilt / 45, 1.0); // 45° = full volume
-  const DEAD_ZONE = 0.04;
-  let raw = magnitude < DEAD_ZONE ? 0 : magnitude;
-
-  // ── BIMODAL FUSION: The Mix (Phase 7.1 & 7.2) ─────────────────────────────
-  if (cameraActive && !cameraFallback) {
-    // 1. Dynamic Alpha weighting based on light confidence
-    const brightnessScore = Math.max(0, Math.min((currentLuminance - 15) / 200, 1.0));
-    const alpha = 1.0 - (0.4 * brightnessScore); // Up to 40% weight given to camera in bright light
-
-    // 2. Suppress Accidental Bumps (Spike Validation)
-    if (raw > 0.2 && visualVelocitySmoothed < 0.8) {
-      // Accelerometer sees massive spike, but camera sees no movement
-      raw *= 0.1; // Suppress false trigger
-    } else {
-      // 3. Weighted Blend of Accel and Visual Velocity
-      // visualVelocitySmoothed roughly ranges 0-20. Scale it max 1.0.
-      const visualMag = Math.min(visualVelocitySmoothed / 15, 1.0);
-      raw = (raw * alpha) + (visualMag * (1.0 - alpha));
+      const visionLed = document.getElementById('vision-led');
+      const visionLabel = document.getElementById('vision-alpha-label');
+      if (visionLed && visionLabel) {
+        const alphaPct = Math.round((1.0 - alpha) * 100);
+        visionLabel.textContent = `Vision: ${alphaPct}%`;
+        const activity = Math.min(visualVelocitySmoothed / 15, 1.0);
+        visionLed.style.opacity = 0.3 + activity * 0.7;
+        visionLed.style.transform = `scale(${1.0 + activity * 0.5})`;
+      }
     }
 
-    // Update Vision Monitor HUD
-    const visionLed = document.getElementById('vision-led');
-    const visionLabel = document.getElementById('vision-alpha-label');
-    if (visionLed && visionLabel) {
-      const alphaPct = Math.round((1.0 - alpha) * 100);
-      visionLabel.textContent = `Vision: ${alphaPct}%`;
-      const activity = Math.min(visualVelocitySmoothed / 15, 1.0);
-      visionLed.style.opacity = 0.3 + activity * 0.7;
-      visionLed.style.transform = `scale(${1.0 + activity * 0.5})`;
+    smoothed = 0.35 * raw + 0.65 * smoothed;
+    bellowsSpeed = Math.min(smoothed, 1.0);
+    updateVisuals(bellowsSpeed);
+
+    if (activeKeys.size > 0) {
+      setVolume(bellowsSpeed);
     }
-  }
+  } else if (activeInstrumentMode === 'cello') {
+    // ── CELLO FUSION LOOP ─────────────────────────────────────────────────────
+    
+    // Bow speed magnitude - mixture of tilt changes and visual velocity (Phase 13.1)
+    let bowVelocity = 0;
+    if (lastCombinedTilt !== null) {
+        bowVelocity = Math.abs(combinedTilt - lastCombinedTilt);
+    }
+    lastCombinedTilt = combinedTilt;
+    
+    let rawBow = bowVelocity;
+    if (cameraActive && !cameraFallback) {
+      const alpha = currentLuminance > 15 ? 0.6 : 1.0;
+      rawBow = (bowVelocity * alpha) + ((visualVelocitySmoothed / 10) * (1 - alpha));
+      
+      const visionLed = document.getElementById('vision-led');
+      if (visionLed) {
+        const activity = Math.min(visualVelocitySmoothed / 15, 1.0);
+        visionLed.style.opacity = 0.3 + activity * 0.7;
+        visionLed.style.transform = `scale(${1.0 + activity * 0.5})`;
+        document.getElementById('vision-alpha-label').textContent = `Bow Vision: ${Math.round((1-alpha)*100)}%`;
+      }
+    }
+    
+    smoothed = 0.35 * rawBow + 0.65 * smoothed;
+    let safeSmoothed = isNaN(smoothed) ? 0 : smoothed;
 
-  // Exponential smoothing — slightly faster attack, slower decay
-  smoothed = 0.35 * raw + 0.65 * smoothed;
-  bellowsSpeed = Math.min(smoothed, 1.0);
+    // Map bow to Filter Cutoff (Phase 12.1) & Bite Key Logic (Phase 13.2)
+    if (celloActiveNote) {
+       // Filter range 100Hz to 3000Hz based on bow
+       const cutoff = 100 + (Math.min(safeSmoothed / 2, 1.0) * 2900);
+       celloFilter.frequency.rampTo(cutoff, 0.05);
 
-  updateVisuals(bellowsSpeed);
+       // Scale volume too: Silent if not bowing! 
+       let synthVol = safeSmoothed < 0.1 ? -40 : -20 + (safeSmoothed * 20); 
+       celloSynth.volume.rampTo(synthVol, 0.05);
+    }
 
-  if (activeKeys.size > 0) {
-    setVolume(bellowsSpeed);
+    // Vibrato Gyro (Phase 12.2)
+    if (celloLfo) {
+      // Tie gamma (roll) delta to LFO speed/depth
+      let vibratoIntensity = Math.min(Math.abs(deltaGamma) / 30, 1.0);
+      celloLfo.max = 5 + (vibratoIntensity * 20); // 5 to 25 cents
+      celloLfo.min = -celloLfo.max;
+      celloLfo.frequency.value = 4 + (vibratoIntensity * 3); // 4Hz to 7Hz
+    }
   }
 }
 
@@ -864,4 +962,133 @@ function average(arr) {
 function getVariance(arr) {
   const avg = average(arr);
   return average(arr.map(v => (v - avg) ** 2));
+}
+
+// ─── CELLO MODE IMPLEMENTATION ──────────────────────────────────────────────────
+const CelloScales = {
+  major: [0, 2, 4, 5, 7, 9, 11],
+  minor: [0, 2, 3, 5, 7, 8, 10],
+  pentatonic: [0, 2, 4, 7, 9]
+};
+
+let celloSynth = null;
+let celloFilter = null;
+let celloLfo = null;
+let celloActiveNote = false;
+let celloTargetFreq = null;
+
+function initCelloAudio() {
+  if (celloSynth) return;
+
+  celloFilter = new Tone.Filter({
+    type: "lowpass",
+    frequency: 200,
+    rolloff: -24,
+    Q: 2
+  }).toDestination();
+
+  // Sawtooth foundation
+  celloSynth = new Tone.Synth({
+    oscillator: { type: 'sawtooth' },
+    envelope: { attack: 0.1, decay: 0.2, sustain: 1.0, release: 0.5 }
+  }).connect(celloFilter);
+
+  celloLfo = new Tone.LFO({
+    type: "sine",
+    min: -15, // vibrato depth
+    max: 15,
+    frequency: 5
+  }).start();
+  celloLfo.connect(celloSynth.detune);
+
+  // Re-use reverb if available
+  if (typeof reverb !== 'undefined') {
+     celloFilter.connect(reverb);
+  }
+}
+
+// Map Y touch to semitone (0-24 for a 2 octave range)
+function processCelloScaleLock(rawSemitone) {
+   if (!scaleLockEnabled) return rawSemitone;
+   
+   const scaleIntervals = CelloScales[celloScaleName] || CelloScales.major;
+   const octave = Math.floor(rawSemitone / 12);
+   const degree = Math.floor(rawSemitone) % 12; // Snap to integer degree for comparison
+   
+   // Find closest scale note
+   let closestDegree = scaleIntervals[0];
+   let minDiff = 100;
+   
+   for (let note of scaleIntervals) {
+      // check adjacent octaves to handle wrap-around flawlessly
+      for (let offset of [-12, 0, 12]) {
+        let test = note + offset;
+        let diff = Math.abs(test - degree);
+        if (diff < minDiff) {
+           minDiff = diff;
+           closestDegree = test;
+        }
+      }
+   }
+   
+   const targetSemitone = (octave * 12) + closestDegree;
+   
+   // Magnetic Portamento: If within a small window, pull heavily.
+   let dist = rawSemitone - targetSemitone;
+   if (Math.abs(dist) < 0.45) {
+      return targetSemitone + (dist * 0.1); 
+   }
+   return rawSemitone;
+}
+
+function updateCelloPitch(clientY) {
+  const rect = document.getElementById('cello-fingerboard').getBoundingClientRect();
+  // Reverse Y so top is highest pitch
+  let yPct = 1.0 - Math.max(0, Math.min((clientY - rect.top) / rect.height, 1.0)); 
+  
+  const rawSemi = yPct * 24; 
+  const lockedSemi = processCelloScaleLock(rawSemi);
+  
+  // Base frequency string tuning
+  const baseFreq = Tone.Frequency(`${celloKey}2`).toFrequency();
+  celloTargetFreq = baseFreq * Math.pow(2, lockedSemi / 12);
+  
+  if (celloActiveNote) {
+     celloSynth.frequency.rampTo(celloTargetFreq, 0.05); // Smooth slide
+  }
+}
+
+function setupCelloFingerboard() {
+  const board = document.getElementById('cello-fingerboard');
+  const indicator = document.getElementById('finger-indicator');
+  
+  board.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    updateCelloPitch(touch.clientY);
+    celloActiveNote = true;
+    
+    indicator.style.opacity = '1';
+    indicator.style.top = (touch.clientY - board.getBoundingClientRect().top) + 'px';
+    
+    // Attack but keep filter closed until movement (Phase 13.2 "Bite Key")
+    celloFilter.frequency.value = 50; 
+    celloSynth.triggerAttack(celloTargetFreq);
+  });
+  
+  board.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    updateCelloPitch(touch.clientY);
+    indicator.style.top = (touch.clientY - board.getBoundingClientRect().top) + 'px';
+  });
+  
+  board.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    if (e.touches.length === 0) {
+      celloActiveNote = false;
+      celloSynth.triggerRelease();
+      indicator.style.opacity = '0';
+    }
+  });
 }
