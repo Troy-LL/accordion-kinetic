@@ -1001,10 +1001,11 @@ function initCelloAudio() {
   }).start();
   celloLfo.connect(celloSynth.detune);
 
-  // Re-use reverb if available
-  if (typeof reverb !== 'undefined') {
-     celloFilter.connect(reverb);
+  // Apply reverb for the Cello
+  if (!reverb) {
+     reverb = new Tone.Reverb({ decay: 3.5, preDelay: 0.1, wet: 0.5 }).toDestination();
   }
+  celloFilter.connect(reverb);
 }
 
 // Map Y touch to semitone (0-24 for a 2 octave range)
