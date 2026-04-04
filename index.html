@@ -80,9 +80,14 @@
         <button class="key key-white" data-note="G5">G</button>
         <button class="key key-white" data-note="A5">A</button>
         <button class="key key-white" data-note="B5">B</button>
-        <button class="key key-white" data-note="C6">C</button>
-      </div>
+        <button class="key key-white" data-note="C6">C</button>      </div>
 
+    </div>
+
+    <!-- Vision Monitor (Phase 7 HUD) -->
+    <div id="vision-monitor">
+      <div id="vision-led"></div>
+      <span id="vision-alpha-label">Vision: 0%</span>
     </div>
 
     <!-- Recalibrate: only shows when no notes playing -->
@@ -124,7 +129,7 @@
   </div>
 
   <!-- Ghost Canvas for 1-Pixel Camera Output -->
-  <video id="ghost-video" autoplay playsinline style="display:none;"></video>
+  <video id="ghost-video" autoplay playsinline muted style="display:none;"></video>
   <canvas id="ghost-canvas" width="1" height="1" style="display:none;"></canvas>
 
   <script src="app.js"></script>

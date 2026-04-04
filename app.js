@@ -19,8 +19,8 @@ let lastCombinedTilt = null;
 
 // Stability detection for calibration ring
 let stabilityReadings = [];
-const STABILITY_WINDOW  = 12;   // number of readings to average
-const STABILITY_THRESH  = 0.8;  // max variance to be considered "still"
+const STABILITY_WINDOW  = 30;   // number of readings to average (roughly 0.5s)
+const STABILITY_THRESH  = 1.2;  // slightly more lenient for handheld stability
 // Active keys (multi-touch chords)
 const activeKeys = new Set();
 let chordTimer       = null;    // the 30ms debounce timer
@@ -51,10 +51,10 @@ let calibratingLuminanceSamples = [];
 let wakeLock = null;
 
 // ─── BOOT: Start button ───────────────────────────────────────────────────────
-document.getElementById('start-btn').addEventListener('click', () => {
-  // Fire off camera request first to avoid blocking audio sequentially
-  initCamera();
-  requestPermissionsAndStart();
+document.getElementById('start-btn').addEventListener('click', async () => {
+  // Fire off camera request, then wait for orientation permissions
+  await initCamera();
+  await requestPermissionsAndStart();
 });
 
 async function requestPermissionsAndStart() {
@@ -85,8 +85,11 @@ async function requestPermissionsAndStart() {
     isStarted = true;
 
     if (sensorGranted) {
-      // Begin listening — calibration happens inside onOrientation
+      console.log('Motion sensors ACTIVE');
       window.addEventListener('deviceorientation', onOrientationCalibrate);
+    } else {
+      console.warn('Motion sensors DENIED');
+      alert('Note: This app requires Motion Sensors to play. Please check your browser settings.');
     }
 
     // Acquire wake lock so screen doesn't sleep mid-play
@@ -94,9 +97,8 @@ async function requestPermissionsAndStart() {
       wakeLock = await navigator.wakeLock.request('screen');
     } catch (_) {}
 
-    // Show play UI, hide permission screen
-    document.getElementById('permission-screen').style.display = 'none';
-    document.getElementById('play-ui').style.display = 'flex';
+    // We no longer hide the screen here. 
+    // We wait for calibration to finish in onOrientationCalibrate.
     updateVisuals(0);
 
   } catch (err) {
@@ -251,6 +253,12 @@ function onOrientationCalibrate(e) {
     window.addEventListener('deviceorientation', onOrientation);
 
     updateStabilityRing(1, true); // fill ring fully, show LOCKED
+
+    // AFTER CALIBRATION: Wait a moment for the user to see LOCKED, then switch UI
+    setTimeout(() => {
+      document.getElementById('permission-screen').style.display = 'none';
+      document.getElementById('play-ui').style.display = 'flex';
+    }, 800);
   }
 }
 
@@ -373,6 +381,17 @@ function onOrientation(e) {
       // visualVelocitySmoothed roughly ranges 0-20. Scale it max 1.0.
       const visualMag = Math.min(visualVelocitySmoothed / 15, 1.0);
       raw = (raw * alpha) + (visualMag * (1.0 - alpha));
+    }
+
+    // Update Vision Monitor HUD
+    const visionLed = document.getElementById('vision-led');
+    const visionLabel = document.getElementById('vision-alpha-label');
+    if (visionLed && visionLabel) {
+      const alphaPct = Math.round((1.0 - alpha) * 100);
+      visionLabel.textContent = `Vision: ${alphaPct}%`;
+      const activity = Math.min(visualVelocitySmoothed / 15, 1.0);
+      visionLed.style.opacity = 0.3 + activity * 0.7;
+      visionLed.style.transform = `scale(${1.0 + activity * 0.5})`;
     }
   }
 

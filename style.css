@@ -367,3 +367,37 @@
   #dark-room-alert.hidden {
     opacity: 0;
   }
+
+  /* ─── VISION MONITOR HUD ──────────────────────────── */
+  #vision-monitor {
+    position: fixed;
+    top: 2dvh;
+    left: 2vw;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0,0,0,0.3);
+    padding: 6px 12px;
+    border-radius: 20px;
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255,255,255,0.1);
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  #vision-led {
+    width: 8px;
+    height: 8px;
+    background: #2ecc71;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #2ecc71;
+    transition: opacity 0.05s, transform 0.05s;
+  }
+
+  #vision-alpha-label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: rgba(255,255,255,0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
